@@ -1,2 +1,2 @@
-![ESP_Flam](ESP_Flam.png)
+![ESP_Flam](docs/images/ESP_Flam.png)
 
