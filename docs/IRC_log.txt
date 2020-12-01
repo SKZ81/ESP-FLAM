@@ -1,0 +1,32 @@
+* Sujet de #avrs choisi par Emil!emil@emil.fi (Wed Sep 16 16:58:02 2020)
+<skz81> Another topic..
+<skz81> I just got my ESP32 3x 12v RGB LED driver board from JLCPCB. Pretty fast ! 7d2h total round trip... Impressive !
+<skz81> For a bit moar than 20€ for 5 board. This time I choosed DHL delivery... That's like 7€ more (15 instead of 8 for snail chineese postage).
+<skz81> But I had a 6.5 coupon, I really din't know why, but YEEAAAH 8) same price or so for faster delivery, given I am in a hurry on this prject, because it's a Xmas gift...
+<skz81> I had the test firmware ready : https://imgur.com/a/Yb9kHSQ
+<funcbot> [ ESPFlam test FW GUI - Album on Imgur ]
+<skz81> The ESP32 serves this webpage, but starts with all PWM output at either 66% or 33% dut cycle, 1KHz
+<skz81> As soon as a slider is moved, JS script updates the corresponding square color, and sends an AJAX request to the server.
+<skz81> The rectangle on the right, if orange/brown, indicates a transmition failiure. I took the screenshot after having powered down the ESP32, so that's why 2 LEDs/requests are in default.
+<skz81> If the ESP32 receives and parses well the AJAX request, it updates the duty cycles of the corresponding LED / pins.
+<skz81> (Funnily enough, I use, the Motor Control PWM peripheral, while there is a dedicated "LED-C(ontrol)" module aside... But I fond the API brain fuck, and that's an "asymetric" 2x8 modules, where I need 9 lines... Found the MCPWM module way easier to leverage, and the 2 units are symetric. As in same API calls... At least)
+<skz81> So when I found that VERY STUPID NOOB mistake (missing "break;" in last "switch...case" staement before a "defaut: return;"... Slap me --very hard --  in the back, I deserve it !)
+<skz81> I was happily controlling a test LED on a breadboard using 3 oversized MOSFETs, using a DevKitC esp32 devboard
+<skz81> Came the time to solder the ESP32... Alcohol washing, removing solder off the ESP WROOM module, salveraged from previous board using hot air
+* skz81 bought himself a "real" soldering station, few month ago
+<skz81> with hot air and jiggles (erm nope, but "flashing" 7 segments !)
+<skz81> Putting a bit of thermal paste on the thermal GND I can't soldr anyway...
+<skz81> Flux on the pads, and GOOOOOOOOOO
+<skz81> Had to redo : unsolder one side on the WROOM module, hot air again, way easier... (to much solder bridges, I must had put too much thermal paster or forgot a little "mount" somewhere, but solder flown between the PCM and the module, not expected...)
+<skz81> PCB*
+<skz81> The technique is to solder the GND pins first as they are thermal sink they need to be be heated more, therefore are more stable when soldering the other pins...
+<skz81> But fuck, the module was running fucking hot even before the solder melted on each GND pin... I was pushing it down this time, using bare fingers on the top sheild....
+<skz81> When you have the both and both side on-top GND pins soldered, it becomes a piece of cake.
+<skz81> That time the remaining solder acted as a friend... Just had to point my iron is the seemlingly clean castellated hole bump, see the remaining solder melt (that makes the pad heat), add a bit of solder touching the top of the castellated hole, retract the iron...
+<skz81> After struggleling long minutes on soldering GNDs, soldering all other pads was a pleasure. Really satisfaying.
+<skz81> Obviously, I runned no-bridge continuity tests after completing each side.
+<skz81> Soldering the PROG and RESET buttons, the UART connector, and I should be able to falsh it : success !!
+<skz81> Here I am :
+<skz81> I don't really bother, but funnily enough, when I tested the PWM signal (by putting the probe against the "input" of the resistor controlling the MOSFET)
+<skz81> I found ALL signals out of the ESP32 to the input resitor of the mosfet gate, are all very neat and sqaure...
+<skz81> But one, FUCKING ONE.

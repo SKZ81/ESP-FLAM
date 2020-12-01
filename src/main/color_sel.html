@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+  <head>
+    <script>
+      function toHex(n) {
+        var hex = n.toString(16);
+        while (hex.length < 2) {hex = "0" + hex; }
+        return hex;
+      }
+
+      function toHexString(red, green, blue) {
+        var r = toHex(parseInt(red));
+        var g = toHex(parseInt(green));
+        var b = toHex(parseInt(blue));
+        var ret = "#" +  r + g + b;
+        return ret;
+      }
+
+        function updateServer(nb_led, color) {
+          var xhttp = new XMLHttpRequest();
+          xhttp.onreadystatechange = function() {
+            if (this.readyState == 4) {
+              if (this.status == 200) {
+                document.getElementById("led_" + nb_led + "_status").style.backgroundColor = "#FFFFFF";
+              } else {
+                document.getElementById("led_" + nb_led + "_status").style.backgroundColor = "#F0E000";
+              }
+            }
+          };
+          xhttp.open("POST", "color", true);
+          xhttp.send("led="+nb_led+"\ncolor="+color);
+        }
+
+      function on_slider_change(id, value) {
+        document.getElementById(id + "_display_value").innerHTML = value;
+        var led_nb = id.split('_', 1)[0];
+        var hexColor = toHexString(
+            document.getElementById(led_nb + "_red").value,
+            document.getElementById(led_nb + "_green").value,
+            document.getElementById(led_nb + "_blue").value
+        );
+        document.getElementById("led_" + led_nb + "_color").style.backgroundColor = hexColor;
+
+        updateServer(led_nb, hexColor);
+      }
+    </script>
+  </head>
+
+  <body>
+    <h2> LED 1 </h2>
+    <table id="led_1">
+      <tr>
+        <td><div id="led_1_color" style="height: 50px; background-color: rgb(0, 0, 0);"></div></td>
+        <td></td>
+        <td><div id="led_1_status" style="height: 50px; background-color: rgb(255, 255, 255);"></div></td>
+      </tr>
+      <tr>
+        <td><label for="1_red">Red (0..255):</label></td>
+        <td><span id="1_red_display_value">0</span></td>
+        <td><input type="range" id="1_red" name="1_red" value="0" min="0" max="255" oninput="on_slider_change(this.id, this.value)" onchange="on_slider_change(this.id, this.value)"></td>
+      </tr>
+      <tr>
+        <td><label for="1_green">Green (0..255):</label></td>
+        <td><span id="1_green_display_value">0</span></td>
+        <td><input type="range" id="1_green" name="1_green" value="0" min="0" max="255" oninput="on_slider_change(this.id, this.value)" onchange="on_slider_change(this.id, this.value)"></td>
+      </tr>
+      <tr>
+        <td><label for="1_blue">Blue (0..255):</label></td>
+        <td><span id="1_blue_display_value">0</span></td>
+        <td><input type="range" id="1_blue" name="1_blue" value="0" min="0" max="255" oninput="on_slider_change(this.id, this.value)" onchange="on_slider_change(this.id, this.value)"></td>
+      </tr>
+    </table>
+
+    <h2> LED 2 </h2>
+    <table id="led_2">
+        <tr><td><div id="led_2_color" style="height: 50px; background-color: rgb(0, 0, 0);"></div></td>
+        <td></td>
+        <td><div id="led_2_status" style="height: 50px; background-color: rgb(0, 0, 0);"></div></td>
+      </tr>
+      <tr>
+        <td><label for="2_red">Red (0..255):</label></td>
+        <td><span id="2_red_display_value">0</span></td>
+        <td><input type="range" id="2_red" name="2_red" value="0" min="0" max="255" oninput="on_slider_change(this.id, this.value)" onchange="on_slider_change(this.id, this.value)"></td>
+      </tr>
+      <tr>
+        <td><label for="2_green">Green (0..255):</label></td>
+        <td><span id="2_green_display_value">0</span></td>
+        <td><input type="range" id="2_green" name="2_green" value="0" min="0" max="255" oninput="on_slider_change(this.id, this.value)" onchange="on_slider_change(this.id, this.value)"></td>
+      </tr>
+      <tr>
+        <td><label for="2_blue">Blue (0..255):</label></td>
+        <td><span id="2_blue_display_value">0</span></td>
+        <td><input type="range" id="2_blue" name="2_blue" value="0" min="0" max="255" oninput="on_slider_change(this.id, this.value)" onchange="on_slider_change(this.id, this.value)"></td>
+      </tr>
+    </table>
+
+    <h2> LED 3 </h2>
+    <table id="led_3">
+      <tr>
+        <td><div id="led_3_color" style="height: 50px; background-color: rgb(0, 0, 0);"></div></td>
+        <td></td>
+        <td><div id="led_3_status" style="height: 50px; background-color: rgb(255, 255, 255);"></div></td>
+      </tr>
+      <tr>
+        <td><label for="3_red">Red (0..255):</label></td>
+        <td><span id="3_red_display_value">0</span></td>
+        <td><input type="range" id="3_red" name="3_red" value="0" min="0" max="255" oninput="on_slider_change(this.id, this.value)" onchange="on_slider_change(this.id, this.value)"></td>
+      </tr>
+      <tr>
+        <td><label for="3_green">Green (0..255):</label></td>
+        <td><span id="3_green_display_value">0</span></td>
+        <td><input type="range" id="3_green" name="3_green" value="0" min="0" max="255" oninput="on_slider_change(this.id, this.value)" onchange="on_slider_change(this.id, this.value)"></td>
+      </tr>
+      <tr>
+        <td><label for="3_blue">Blue (0..255):</label></td>
+        <td><span id="3_blue_display_value">0</span></td>
+        <td><input type="range" id="3_blue" name="3_blue" value="0" min="0" max="255" oninput="on_slider_change(this.id, this.value)" onchange="on_slider_change(this.id, this.value)"></td>
+      </tr>
+    </table>
+
+  </body>
+</html>
