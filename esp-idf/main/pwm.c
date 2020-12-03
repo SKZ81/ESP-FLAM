@@ -14,7 +14,7 @@
 
 led_state_t led_states[NB_LEDS];
 
-const char *TAG = "led_pwm";
+static const char *TAG = "led_pwm";
 
 void espflam_leds_init(led_conf_t leds_config[NB_LEDS]) {
     ESP_LOGI(TAG, "Set LED 0 red pin as GPIO %u", leds_config[0].red_pin);

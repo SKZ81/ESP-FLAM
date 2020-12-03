@@ -23,6 +23,9 @@
 #include <esp_http_server.h>
 
 #include "pwm.h"
+#include "mode_mngt.h"
+
+#include <cJSON.h>
 
 /* A simple example that demonstrates how to create GET and POST
  * handlers for the web server.
@@ -139,6 +142,7 @@ static esp_err_t color_post_handler(httpd_req_t *req)
     if (req->content_len > 30) {
         ESP_LOGW(TAG, "Got a request with an obviously too long payload (%d bytes)", req->content_len);
         httpd_resp_send_err(req, 413, NULL);
+        return ESP_FAIL;
     }
 
     while ((ret = httpd_req_recv(req, buf, sizeof(buf))) == HTTPD_SOCK_ERR_TIMEOUT) {
@@ -173,6 +177,117 @@ static const httpd_uri_t uri_color = {
 };
 
 
+
+
+
+static esp_timer_handle_t fireFXhandle = NULL;
+
+
+// TODO: clean that Doubleplusugly chunk : i copied those private struct from mode_mngt.c
+typedef struct s_candle {
+    float yellowishity;
+    float intensity;
+} candle_t;
+
+typedef struct s_cb_fire_data {
+    uint64_t next_timestamp;
+    candle_t candle[3];
+} cb_fire_data_t;
+//*****
+
+cb_fire_data_t fire_arg;
+
+extern void cb_mode_fire( void * arg );
+
+static esp_err_t fire_post_handler(httpd_req_t *req)
+{
+    int ret = HTTPD_SOCK_ERR_TIMEOUT;
+    if (fireFXhandle != NULL) {
+        esp_timer_stop(fireFXhandle);
+        fireFXhandle = NULL;
+    }
+    char *buf = malloc(req->content_len+2);
+    if (! buf) {
+        ESP_LOGE(TAG, "fire_post_handler() mem alloc for handling request failed.");
+        httpd_resp_send_err(req, 500, "Not enought memory");
+        return ESP_FAIL;
+    }
+
+    while ((ret = httpd_req_recv(req, buf, sizeof(buf))) == HTTPD_SOCK_ERR_TIMEOUT) {
+        ESP_LOGI(TAG, "fire_post_handler() Request timeout, retrying...");
+    }
+
+    if (ret != req->content_len) {
+        ESP_LOGE(TAG, "BAD REQUEST. content length is %d, but read %d bytes",
+                req->content_len, ret);
+        httpd_resp_send_err(req, 400, "Content-Length mismatch actual length");
+        return ESP_FAIL;
+    }
+
+    cJSON *jsonreq = cJSON_Parse(buf);
+    mode_config.mode = FIRE;
+    mode_config.config.fire.brightness = cJSON_GetObjectItem(jsonreq,"brightness")->valuedouble;
+    mode_config.config.fire.flickering = cJSON_GetObjectItem(jsonreq,"flickering")->valuedouble;
+    mode_config.config.fire.speed = cJSON_GetObjectItem(jsonreq,"speed")->valuedouble;
+
+    ESP_LOGI(TAG, "Got a /fire request : {B: %.4f, F: %.4f, S: %.4f}",
+                mode_config.config.fire.brightness,
+                mode_config.config.fire.flickering,
+                mode_config.config.fire.speed);
+
+    fire_arg.next_timestamp = 0;
+
+    for (uint i=0; i<3; i++) {
+        fire_arg.candle[i].intensity = 0.5;
+        fire_arg.candle[i].yellowishity = 0.5;
+    }
+
+    esp_timer_create_args_t create_args = {
+        .callback = cb_mode_fire,
+        .arg = &fire_arg,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "fireFX"
+    };
+    if (esp_timer_create(&create_args,  &fireFXhandle) != ESP_OK
+        || esp_timer_start_periodic(fireFXhandle, 1000) != ESP_OK) {
+        httpd_resp_send_err(req, 500, "Could not start task to handle fire effect");
+    }
+
+    httpd_resp_sendstr(req, NULL);
+    return ESP_OK;
+}
+
+static const httpd_uri_t uri_fire = {
+    .uri       = "/fire",
+    .method    = HTTP_POST,
+    .handler   = fire_post_handler,
+    .user_ctx  = NULL
+};
+
+
+
+static esp_err_t firestop_post_handler(httpd_req_t *req)
+{
+    if (fireFXhandle != NULL) {
+        esp_timer_stop(fireFXhandle);
+        fireFXhandle = NULL;
+        httpd_resp_sendstr(req, NULL);
+        return ESP_OK;
+    }
+
+    httpd_resp_send_err(req, 400, "Fire FX not running");
+    return ESP_FAIL;
+}
+
+
+static const httpd_uri_t uri_firestop = {
+    .uri       = "/firestop",
+    .method    = HTTP_POST,
+    .handler   = firestop_post_handler,
+    .user_ctx  = NULL
+};
+
+
 static httpd_handle_t start_webserver(void)
 {
     httpd_handle_t server = NULL;
@@ -188,6 +303,8 @@ static httpd_handle_t start_webserver(void)
         httpd_register_uri_handler(server, &uri_index);
         httpd_register_uri_handler(server, &uri_index_html);
         httpd_register_uri_handler(server, &uri_color);
+        httpd_register_uri_handler(server, &uri_fire);
+        httpd_register_uri_handler(server, &uri_firestop);
         return server;
     }
 
