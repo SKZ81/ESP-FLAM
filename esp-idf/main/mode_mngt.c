@@ -121,48 +121,55 @@ void cb_mode_fire( void * arg ) {
     cb_fire_data_t *data = (cb_fire_data_t*)arg;
     const mode_fire_cfg_t *conf = &(mode_config.config.fire);
     uint64_t current_time = esp_timer_get_time();
+//     static uint64_t last_time = 0;
 
     if ( ! checkmode(FIRE, "FIRE")) return;
 
-    if(current_time < data->next_timestamp) {
-        // time counter has overflown, reset next_timestamp.
-        // Not accurate calculation, this may cause a little glitch in the
-        // animation, but this occurs only every 584942 years or so...
-        data->next_timestamp = 0;
-        return;
+//     if(current_time < last_time) {
+//         // time counter has overflown, reset next_timestamp.
+//         // Not accurate calculation, this may cause a little glitch in the
+//         // animation, but this occurs only every 584942 years or so...
+//         data->next_timestamp = 0;
+//         return;
+//     }
+//
+//     if (current_time > data->next_timestamp) {
+//         data->next_timestamp = current_time + conf->speed*1000;
+
+    for (int i=0; i<CONFIG_NB_LEDS; i++) {
+        candle_t *candle = data->candle + i;
+
+        // candle's delta in yellowishity / intensity
+        float y_delta = ( (int)(esp_random()&0xFFFF) - 0X8000) / (float)0X10000;
+        float i_delta = ( (int)(esp_random()&0xFFFF) - 0X8000) / (float)0X10000;
+
+        candle->yellowishity += (y_delta * conf->flickering) * conf->speed;
+        candle->intensity += (i_delta) * conf->speed;
+
+        // flooring / ceiling
+        if (candle->yellowishity < CONFIG_FIRE_YELLOW_MIN)
+            candle->yellowishity = CONFIG_FIRE_YELLOW_MIN;
+        if (candle->yellowishity > CONFIG_FIRE_YELLOW_MAX)
+            candle->yellowishity = CONFIG_FIRE_YELLOW_MAX;
+
+        if (candle->intensity < CONFIG_FIRE_BRIGHT_MIN)
+            candle->intensity = CONFIG_FIRE_YELLOW_MIN;
+        if (candle->intensity > CONFIG_FIRE_BRIGHT_MAX)
+            candle->intensity = CONFIG_FIRE_YELLOW_MAX;
+
+        // convert to RGB and send values to LED
+        uint8_t r = 255 * candle->intensity * conf->brightness;
+        uint8_t g = 255 * candle->intensity * candle->yellowishity * conf->brightness;
+        espflam_set_led_RGB(i+1, r, g, 0);
+#if DEBUG_FIRE == 1
+        #warning "Fire FX Debug mode"
+        ESP_LOGI(TAG, "[%lld] %d (I: %.4f, Y: %.4f, dI: %.4f, dY: %.4f)", current_time, i, candle->intensity, candle->yellowishity, i_delta, y_delta);
+//         }
+#endif
     }
 
-    if (current_time > data->next_timestamp) {
-        data->next_timestamp = current_time + conf->speed*1000;
-
-        for (int i=0; i<CONFIG_NB_LEDS; i++) {
-            candle_t *candle = data->candle + i;
-
-            // candle's delta in yellowishity / intensity
-            float y_delta = ( (esp_random()&0xFFFF) - 0X800) / (float)0X10000;
-            float i_delta = ( (esp_random()&0xFFFF) - 0X800) / (float)0X10000;
-
-            candle->yellowishity += (y_delta * conf->flickering);
-            candle->intensity += (i_delta);
-
-            // flooring / ceiling
-            if (candle->yellowishity < CONFIG_FIRE_YELLOW_MIN)
-                candle->yellowishity = CONFIG_FIRE_YELLOW_MIN;
-            if (candle->yellowishity > CONFIG_FIRE_YELLOW_MAX)
-                candle->yellowishity = CONFIG_FIRE_YELLOW_MAX;
-
-            if (candle->intensity < CONFIG_FIRE_BRIGHT_MIN)
-                candle->intensity = CONFIG_FIRE_YELLOW_MIN;
-            if (candle->intensity > CONFIG_FIRE_BRIGHT_MAX)
-                candle->intensity = CONFIG_FIRE_YELLOW_MAX;
-
-            // convert to RGB and send values to LED
-            uint8_t r = 255 * candle->intensity * conf->brightness;
-            uint8_t g = 255 * candle->intensity * candle->yellowishity * conf->brightness;
-            espflam_set_led_RGB(i, r, g, 0);
-            ESP_LOGI(TAG, "FIRE candle %d (I: %.4f, Y: %.4f)  ========> rgb(%d, %d, 0)", i, candle->yellowishity, candle->intensity, r, g);
-        }
-    }
+    //     ESP_LOGW(TAG, "Next : %lld  (curr: %lld, last: %lld)", data->next_timestamp, current_time, last_time);
+//     last_time = current_time;
 }
 
 /*

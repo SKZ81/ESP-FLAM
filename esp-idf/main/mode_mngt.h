@@ -53,7 +53,7 @@ typedef struct s_mode_fixed_cfg {
 typedef struct s_mode_fire_cfg {
     double brightness;  // overall brightness multiplication factor
     double flickering;   // intensity
-    double  speed;       // of flickering (period of update in ms)
+    double speed;       // of flickering (period of update in ms)
 } mode_fire_cfg_t;
 
 
