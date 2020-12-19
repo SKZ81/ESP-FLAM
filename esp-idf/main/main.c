@@ -27,6 +27,11 @@
 
 #include <cJSON.h>
 
+
+#include "temp_config.h"
+
+
+
 /* A simple example that demonstrates how to create GET and POST
  * handlers for the web server.
  */
@@ -213,13 +218,13 @@ static esp_err_t fire_post_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    while ((ret = httpd_req_recv(req, buf, sizeof(buf))) == HTTPD_SOCK_ERR_TIMEOUT) {
+    while ((ret = httpd_req_recv(req, buf, req->content_len)) == HTTPD_SOCK_ERR_TIMEOUT) {
         ESP_LOGI(TAG, "fire_post_handler() Request timeout, retrying...");
     }
 
     if (ret != req->content_len) {
-        ESP_LOGE(TAG, "BAD REQUEST. content length is %d, but read %d bytes",
-                req->content_len, ret);
+        ESP_LOGE(TAG, "BAD REQUEST. content length is %d, but read %d bytes (%s)",
+                req->content_len, ret, buf);
         httpd_resp_send_err(req, 400, "Content-Length mismatch actual length");
         return ESP_FAIL;
     }
@@ -229,6 +234,9 @@ static esp_err_t fire_post_handler(httpd_req_t *req)
     mode_config.config.fire.brightness = cJSON_GetObjectItem(jsonreq,"brightness")->valuedouble;
     mode_config.config.fire.flickering = cJSON_GetObjectItem(jsonreq,"flickering")->valuedouble;
     mode_config.config.fire.speed = cJSON_GetObjectItem(jsonreq,"speed")->valuedouble;
+
+    cJSON_Delete(jsonreq);
+    free(buf);
 
     ESP_LOGI(TAG, "Got a /fire request : {B: %.4f, F: %.4f, S: %.4f}",
                 mode_config.config.fire.brightness,
@@ -248,8 +256,15 @@ static esp_err_t fire_post_handler(httpd_req_t *req)
         .dispatch_method = ESP_TIMER_TASK,
         .name = "fireFX"
     };
+
+    uint timer_period = 10000;
+#if DEBUG_FIRE == 1
+    #warning "Fire FX Debug mode"
+    //more time for trace printing
+    timer_period *= 10;
+#endif
     if (esp_timer_create(&create_args,  &fireFXhandle) != ESP_OK
-        || esp_timer_start_periodic(fireFXhandle, 1000) != ESP_OK) {
+        || esp_timer_start_periodic(fireFXhandle, timer_period) != ESP_OK) {
         httpd_resp_send_err(req, 500, "Could not start task to handle fire effect");
     }
 
@@ -268,13 +283,17 @@ static const httpd_uri_t uri_fire = {
 
 static esp_err_t firestop_post_handler(httpd_req_t *req)
 {
+    ESP_LOGI(TAG, "POST /firestop");
     if (fireFXhandle != NULL) {
         esp_timer_stop(fireFXhandle);
+        ESP_LOGI(TAG, "Timer stopped");
         fireFXhandle = NULL;
         httpd_resp_sendstr(req, NULL);
+        ESP_LOGI(TAG, "200 OK sent");
         return ESP_OK;
     }
 
+    ESP_LOGW(TAG, "Fire FX not running...");
     httpd_resp_send_err(req, 400, "Fire FX not running");
     return ESP_FAIL;
 }
