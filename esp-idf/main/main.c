@@ -24,6 +24,7 @@
 
 #include "pwm.h"
 #include "mode_mngt.h"
+#include "color_spaces.h"
 
 #include <cJSON.h>
 
@@ -185,9 +186,6 @@ static const httpd_uri_t uri_color = {
 
 
 
-static esp_timer_handle_t fireFXhandle = NULL;
-
-
 // TODO: clean that Doubleplusugly chunk : i copied those private struct from mode_mngt.c
 typedef struct s_candle {
     float yellowishity;
@@ -198,18 +196,19 @@ typedef struct s_cb_fire_data {
     uint64_t next_timestamp;
     candle_t candle[3];
 } cb_fire_data_t;
-//*****
 
 cb_fire_data_t fire_arg;
 
 extern void cb_mode_fire( void * arg );
 
+//*****
+
 static esp_err_t fire_post_handler(httpd_req_t *req)
 {
     int ret = HTTPD_SOCK_ERR_TIMEOUT;
-    if (fireFXhandle != NULL) {
-        esp_timer_stop(fireFXhandle);
-        fireFXhandle = NULL;
+    if (mode_config.handle != NULL) {
+        esp_timer_stop(mode_config.handle);
+        mode_config.handle = NULL;
     }
     char *buf = malloc(req->content_len+2);
     if (! buf) {
@@ -263,8 +262,8 @@ static esp_err_t fire_post_handler(httpd_req_t *req)
     //more time for trace printing
     timer_period *= 10;
 #endif
-    if (esp_timer_create(&create_args,  &fireFXhandle) != ESP_OK
-        || esp_timer_start_periodic(fireFXhandle, timer_period) != ESP_OK) {
+    if (esp_timer_create(&create_args,  &mode_config.handle) != ESP_OK
+        || esp_timer_start_periodic(mode_config.handle, timer_period) != ESP_OK) {
         httpd_resp_send_err(req, 500, "Could not start task to handle fire effect");
     }
 
@@ -284,10 +283,10 @@ static const httpd_uri_t uri_fire = {
 static esp_err_t firestop_post_handler(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "POST /firestop");
-    if (fireFXhandle != NULL) {
-        esp_timer_stop(fireFXhandle);
+    if (mode_config.handle != NULL) {
+        esp_timer_stop(mode_config.handle);
         ESP_LOGI(TAG, "Timer stopped");
-        fireFXhandle = NULL;
+        mode_config.handle = NULL;
         httpd_resp_sendstr(req, NULL);
         ESP_LOGI(TAG, "200 OK sent");
         return ESP_OK;
@@ -374,12 +373,42 @@ led_conf_t led_config[3] = {
     }
 };
 
+// TODO: clean that Doubleplusugly chunk : i copied those private struct from mode_mngt.c
+typedef enum e_bootanim_step {
+    BOOTANIM_INIT=0,
+    DIMMUP,
+    FADE,
+    ROTATION,
+    DIMMDOWN
+} bootanim_step_t;
+
+
+typedef struct s_cb_bootanim_data {
+    bootanim_step_t step;
+    HSV_color_t led1_hsv;
+    HSV_color_t led2_hsv;
+    HSV_color_t led3_hsv;
+    uint64_t ref_time;
+} cb_bootanim_data_t;
+
+extern void cb_mode_bootanim(void* arg);
+//*****
+
+
+
 void app_main()
 {
     static httpd_handle_t server = NULL;
 
-    ESP_ERROR_CHECK(nvs_flash_init());
-    tcpip_adapter_init();
+    //Initialize NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+      ESP_ERROR_CHECK(nvs_flash_erase());
+      ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    esp_netif_init();
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     espflam_leds_init(led_config);
@@ -402,4 +431,29 @@ void app_main()
      * examples/protocols/README.md for more information about this function.
      */
     ESP_ERROR_CHECK(example_connect());
+
+
+    // Launch boot animation
+
+    mode_config.mode = BOOTANIM;
+    uint timer_period = 10000;
+
+    cb_bootanim_data_t ba_data;
+    ba_data.step = BOOTANIM_INIT;
+
+    esp_timer_create_args_t create_args = {
+        .callback = cb_mode_bootanim,
+        .arg = &ba_data,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "bootanim"
+    };
+
+    if (esp_timer_create(&create_args,  &mode_config.handle) != ESP_OK
+        || esp_timer_start_periodic(mode_config.handle, timer_period) != ESP_OK) {
+            ESP_LOGE("app_main", "Could not start boot animation task");
+    } else {
+        vTaskDelay(30000/portTICK_PERIOD_MS);
+        ESP_LOGI("app_main", "Stopping boot animation timer");
+        esp_timer_stop(mode_config.handle);
+    }
 }
