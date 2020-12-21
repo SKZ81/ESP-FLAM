@@ -1,0 +1,39 @@
+menu "Example Connection Configuration (extra)"
+    choice EXAMPLE_CONNECT_IP_ADDRESS
+        prompt "IP Address"
+        default EXAMPLE_CONNECT_DHCP
+        help
+            Use either DHCP or a static IP address
+
+        config EXAMPLE_CONNECT_DHCP
+            bool "DHCP"
+
+        config EXAMPLE_CONNECT_STATIC
+            bool "Static"
+
+    endchoice
+
+    if EXAMPLE_CONNECT_STATIC
+        config EXAMPLE_WIFI_STATIC_IP
+            string "Static IP address"
+            default "192.168.1.66"
+            help
+                Static IP Adress of the ESP FLAM.
+                Please ensure it matches your actual network.
+
+        config EXAMPLE_WIFI_STATIC_GW
+            string "Static Gateway address"
+            default "192.168.1.255"
+            help
+                Static IP Gateway of the ESP FLAM.
+                Please ensure it matches your actual network.
+
+        config EXAMPLE_WIFI_STATIC_NETMASK
+            string "Static Netmask"
+            default "255.255.255.0"
+            help
+                Static IP Netmask.
+                Please ensure it matches your actual network.
+    endif
+
+endmenu

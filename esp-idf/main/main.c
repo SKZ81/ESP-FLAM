@@ -16,7 +16,7 @@
 #include <nvs_flash.h>
 #include <sys/param.h>
 #include "nvs_flash.h"
-#include "tcpip_adapter.h"
+#include "esp_netif.h"
 #include "esp_eth.h"
 #include "protocol_examples_common.h"
 
@@ -373,6 +373,43 @@ led_conf_t led_config[3] = {
     }
 };
 
+
+esp_err_t string2ip(const char *ipstr, struct esp_ip4_addr *ip) {
+    char * tobetokenizen = strdup(ipstr);
+    int ip_ints[4];
+
+    ESP_LOGI(TAG, "Parse IP string : '%s'", ipstr);
+    char *token = strtok(tobetokenizen, ".");
+    for(int i=0; i<4; i++) {
+        if (token==NULL) {
+            ESP_LOGE(TAG, "Token #%d not found !", i);
+            goto string2ip_parse_err;
+        }
+        ip_ints[i] = atoi(token);
+        if (ip_ints[i]<0 || ip_ints[i]>255) {
+            ESP_LOGE(TAG, "Token #%d (%d) not in 0..255 range", i, ip_ints[i]);
+            goto string2ip_parse_err;
+        }
+        token = strtok(NULL, ".");
+    }
+    // check there is nothing trailing....
+    if (strtok(NULL, ".") != NULL) {
+        ESP_LOGE(TAG, "More than 4 tokens !");
+        goto string2ip_parse_err;
+    }
+
+    ip->addr = ESP_IP4TOADDR(ip_ints[0], ip_ints[1], ip_ints[2], ip_ints[3]);
+    free(tobetokenizen);
+    return ESP_OK;
+
+string2ip_parse_err:
+    free(tobetokenizen);
+    return ESP_FAIL;
+}
+
+
+
+
 // TODO: clean that Doubleplusugly chunk : i copied those private struct from mode_mngt.c
 typedef enum e_bootanim_step {
     BOOTANIM_INIT=0,
@@ -411,20 +448,56 @@ void app_main()
     esp_netif_init();
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
+    esp_netif_t *netif;
+
     espflam_leds_init(led_config);
 
     /* Register event handlers to stop the server when Wi-Fi or Ethernet is disconnected,
      * and re-start it upon connection.
      */
 #ifdef CONFIG_EXAMPLE_CONNECT_WIFI
+#warning "Compiling WiFi FW"
+    netif = esp_netif_create_default_wifi_sta();
+    #ifdef CONFIG_EXAMPLE_CONNECT_STATIC
+        esp_netif_dhcpc_stop(netif);
+        //set the static IP
+        string2ip(CONFIG_EXAMPLE_WIFI_STATIC_IP, &ipInfo.ip);
+        ip4addr_aton(CONFIG_EXAMPLE_WIFI_STATIC_GW, &ipInfo.gw);
+        ip4addr_aton(CONFIG_EXAMPLE_WIFI_STATIC_NETMASK, &ipInfo.netmask);
+        ESP_ERROR_CHECK(esp_netif_set_ip_info(netif, &ipInfo));
+    #endif
+
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, &server));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, &server));
+
 #endif // CONFIG_EXAMPLE_CONNECT_WIFI
+
+
+
+
 #ifdef CONFIG_EXAMPLE_CONNECT_ETHERNET
+#warning "Compiling ETH FW"
+    esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
+    netif = esp_netif_new(&cfg);
+    #ifdef CONFIG_EXAMPLE_CONNECT_STATIC
+        // Set default handlers to process TCP/IP stuffs
+        ESP_ERROR_CHECK(esp_eth_set_default_handlers(netif));
+    #endif //CONFIG_EXAMPLE_CONNECT_STATIC
+
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &connect_handler, &server));
     ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ETHERNET_EVENT_DISCONNECTED, &disconnect_handler, &server));
+
 #endif // CONFIG_EXAMPLE_CONNECT_ETHERNET
 
+
+#ifdef CONFIG_EXAMPLE_CONNECT_STATIC
+    esp_netif_dhcpc_stop(netif);
+    //set the static IP
+    string2ip(CONFIG_EXAMPLE_WIFI_STATIC_IP, &ipInfo.ip);
+    string2ip(CONFIG_EXAMPLE_WIFI_STATIC_GW, &ipInfo.gw);
+    string2ip(CONFIG_EXAMPLE_WIFI_STATIC_NETMASK, &ipInfo.netmask);
+    ESP_ERROR_CHECK(esp_netif_set_ip_info(netif, &ipInfo));
+#endif
 
     /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
      * Read "Establishing Wi-Fi or Ethernet Connection" section in
