@@ -10,6 +10,7 @@ typedef enum e_modeid {
 //     ERROR_2=-2,
     ERROR_WIFI=-1, // can cannect to WiFI, provide credentials using BLE
     SLEEP=0, // LEDs off, sleep mode
+    BOOTANIM,
     CONNECTING, // to WiFi
     FIXED,
     FIRE,
@@ -75,6 +76,10 @@ typedef struct s_mode_cfg {
         mode_fire_cfg_t fire;
         mode_carrousel_cfg_t carrousel;
     } config;
+
+    // if NULL mode is NOT running
+    esp_timer_handle_t handle;
+
 } mode_cfg_t;
 
 

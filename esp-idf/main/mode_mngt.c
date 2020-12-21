@@ -1,11 +1,15 @@
 #include <stdbool.h>
+#include <math.h>
+#include <string.h>
 #include <esp_log.h>
 #include <esp_system.h>
 #include <esp_timer.h>
 
 
+#include "color_spaces.h"
 #include "mode_mngt.h"
 #include "pwm.h"
+
 
 mode_cfg_t mode_config;
 
@@ -42,6 +46,135 @@ static inline bool checkmodes(uint8_t accepted_modes[], uint8_t accepted_modes_s
 
 
 
+typedef enum e_bootanim_step {
+    BOOTANIM_INIT=0,
+    DIMMUP,
+    FADE,
+    ROTATION,
+    DIMMDOWN
+} bootanim_step_t;
+
+typedef struct s_cb_bootanim_data {
+    bootanim_step_t step;
+    HSV_color_t led1_hsv;
+    HSV_color_t led2_hsv;
+    HSV_color_t led3_hsv;
+    uint64_t ref_time;
+} cb_bootanim_data_t;
+
+static const float dimmup_duration = 5*1000000.0;   // µsecond
+static const float fade_duration = 2*1000000.0;     // µsecond
+static const float rotation_speed = (1/3.0)*1000000.0;   // Hz
+static const float rotation_duration = 10*1000000.0;   // µsecond
+static const float dimmdown_duration = 5*1000000.0; // µsecond
+
+float cie1931(float L) {
+    L = L*100.0;
+    if (L <= 8) {
+        return (L/903.3);
+    }
+    float x = ((L+16.0)/119.0);
+    return x*x*x;
+}
+
+float dimm(float value) {
+    return 0.7 * cie1931(value);
+}
+
+float fade(float value) {
+    return expf(value/2)-1.0;
+}
+
+#define TAG_REF_TIME() (data->ref_time = esp_timer_get_time())
+
+void cb_mode_bootanim(void* arg) {
+    static uint8_t accepted_modes[] = { BOOTANIM };
+
+    cb_bootanim_data_t *data = (cb_bootanim_data_t*)arg;
+    uint64_t current_time = esp_timer_get_time(); // µs
+
+    if ( ! checkmodes(accepted_modes, sizeof(accepted_modes))) return;
+
+    switch(data->step) {
+        case BOOTANIM_INIT:
+            init_hsv(&data->led1_hsv, 0.0/3.0, 0.0, 0.0);
+            init_hsv(&data->led2_hsv, 1.0/3.0, 0.0, 0.0);
+            init_hsv(&data->led3_hsv, 2.0/3.0, 0.0, 0.0);
+            data->step = DIMMUP;
+            TAG_REF_TIME();
+        break;
+        case DIMMUP:
+        {
+            float value = dimm((current_time - data->ref_time)/dimmup_duration);
+            data->led1_hsv.v = value;
+            data->led2_hsv.v = value;
+            data->led3_hsv.v = value;
+
+            if (current_time > data->ref_time + dimmup_duration) {
+                TAG_REF_TIME();
+                data->step = FADE;
+            }
+        }
+        break;
+        case FADE:
+        {
+            float saturation = fade((current_time - data->ref_time)/fade_duration);
+            data->led1_hsv.s = saturation;
+            data->led2_hsv.s = saturation;
+            data->led3_hsv.s = saturation;
+
+            if (current_time > data->ref_time + fade_duration) {
+                TAG_REF_TIME();
+                data->step = ROTATION;
+            }
+        }
+        break;
+        case ROTATION:
+        {
+            float angle = rotation_speed*(current_time - data->ref_time)/1000000.0;
+            data->led1_hsv.s = angle;
+            data->led2_hsv.s = angle+1.0/3.0;
+            data->led3_hsv.s = angle+2.0/3.0;
+
+            if (current_time > data->ref_time + rotation_duration) {
+                TAG_REF_TIME();
+                data->step = DIMMDOWN;
+            }
+        }
+        break;
+        case DIMMDOWN:
+        {
+            float value = dimm(1 - (current_time - data->ref_time)/dimmup_duration);
+            float angle = rotation_speed*(current_time - data->ref_time)/1000000.0;
+            data->led1_hsv.s = angle;
+            data->led1_hsv.v = value;
+            data->led2_hsv.s = angle+1.0/3.0;
+            data->led2_hsv.v = value;
+            data->led3_hsv.s = angle+2.0/3.0;
+            data->led3_hsv.v = value;
+
+            if (current_time > data->ref_time + dimmdown_duration) {
+                TAG_REF_TIME();
+                data->step = DIMMDOWN;
+            }
+        }
+        break;
+        default:
+            ESP_LOGE(TAG, "BOOTANIM : Unknown step kind %d. Expected: BOOTANIM_INIT, DIMMUP, FADE, ROTATION, DIMMDOWN.", data->step);
+    }
+
+    RGB_color_t rgb;
+    hsv2rgb(&(data->led1_hsv), &rgb);
+    espflam_set_led_RGB(1, rgb.r, rgb.g, rgb.b);
+    hsv2rgb(&(data->led2_hsv), &rgb);
+    espflam_set_led_RGB(2, rgb.r, rgb.g, rgb.b);
+    hsv2rgb(&(data->led3_hsv), &rgb);
+    espflam_set_led_RGB(3, rgb.r, rgb.g, rgb.b);
+}
+
+
+
+
 
 
 // To be used for errors, connection...
@@ -61,7 +194,7 @@ typedef struct s_cb_blink_data {
 void cb_mode_blink(void* arg) {
     cb_blink_data_t *data = (cb_blink_data_t*)arg;
     const mode_blink_cfg_t *conf = &(mode_config.config.blink);
-    uint64_t current_time = esp_timer_get_time();
+    uint64_t current_time = esp_timer_get_time(); // µs
 
     static uint8_t accepted_modes[] = { ERROR_WIFI,
                                         CONNECTING};
