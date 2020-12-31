@@ -286,9 +286,10 @@ void cb_mode_fire( void * arg ) {
         float y_delta = ( (int)(esp_random()&0xFFFF) - 0X8000) / (float)0X10000;
         float i_delta = ( (int)(esp_random()&0xFFFF) - 0X8000) / (float)0X10000;
 
-        candle->yellowishity += (y_delta * conf->flickering) * conf->speed;
-        candle->intensity += (i_delta) * conf->speed;
-
+//         candle->yellowishity += (y_delta * conf->flickering) * conf->speed;
+//         candle->intensity += (i_delta) * conf->speed;
+        candle->yellowishity = 0.5 + (y_delta * conf->flickering);
+        candle->intensity += 0.5 + i_delta;
         // flooring / ceiling
         if (candle->yellowishity < CONFIG_FIRE_YELLOW_MIN)
             candle->yellowishity = CONFIG_FIRE_YELLOW_MIN;
@@ -303,10 +304,10 @@ void cb_mode_fire( void * arg ) {
         // convert to RGB and send values to LED
         uint8_t r = 255 * candle->intensity * conf->brightness;
         uint8_t g = 255 * candle->intensity * candle->yellowishity * conf->brightness;
-        espflam_set_led_RGB(i+1, r, g, 0);
+        espflam_set_led_RGB(i+1, r, g*conf->yellow_factor, 0);
 #if DEBUG_FIRE == 1
         #warning "Fire FX Debug mode"
-        ESP_LOGI(TAG, "[%lld] %d (I: %.4f, Y: %.4f, dI: %.4f, dY: %.4f)", current_time, i, candle->intensity, candle->yellowishity, i_delta, y_delta);
+        ESP_LOGI(TAG, "[%lld] %d (I: %.4f, Y: %.4f, dI: %.4f, dY: %.4f) => RGB(%d, %d, 0)", current_time, i, candle->intensity, candle->yellowishity, i_delta, y_delta, r, g);
 //         }
 #endif
     }
