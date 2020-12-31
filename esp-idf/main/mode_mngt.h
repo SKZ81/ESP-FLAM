@@ -47,14 +47,15 @@ typedef struct s_mode_blink_cfg {
 
 typedef struct s_mode_fixed_cfg {
     leds_state_t leds_state;
-    double brightness;
+    float brightness;
 } mode_fixed_cfg_t;
 
 
 typedef struct s_mode_fire_cfg {
-    double brightness;  // overall brightness multiplication factor
-    double flickering;   // intensity
-    double speed;       // of flickering (period of update in ms)
+    float brightness;  // overall brightness multiplication factor
+    float flickering;   // intensity
+    float speed;       // of flickering (period of update in ms)
+    float yellow_factor;
 } mode_fire_cfg_t;
 
 
