@@ -47,7 +47,8 @@
         req_body = {
           brightness: parseInt(document.getElementById('fire_brightness').value)/1000,
           flickering: parseInt(document.getElementById('fire_flickering').value)/1000,
-          speed: parseInt(document.getElementById('fire_speed').value)/1000,
+          speed: parseInt(document.getElementById('fire_speed').value),
+          yellow_factor: parseInt(document.getElementById('fire_yel_fact').value)/1000,
         }
 
         var xhttp = new XMLHttpRequest();
@@ -171,21 +172,25 @@
         </td>
     <table id="FIRE">
       <tr>
-        <td><label for="fire_brightness">brightness (0..999):</label></td>
+        <td><label for="fire_brightness">brightness (0..999) [1/1000]:</label></td>
         <td><span id="fire_brightness_display_value">0</span></td>
-        <td><input type="range" id="fire_brightness" name="fire_brightness" value="0" min="0" max="999" oninput="document.getElementById('fire_brightness_display_value').innerHTML = this.value" onchange="document.getElementById('fire_brightness_display_value').innerHTML = this.value"></td>
+        <td><input type="range" id="fire_brightness" name="fire_brightness" value="1" min="1" max="999" oninput="document.getElementById('fire_brightness_display_value').innerHTML = this.value" onchange="document.getElementById('fire_brightness_display_value').innerHTML = this.value"></td>
       </tr>
       <tr>
-        <td><label for="fire_flickering">flickering (0..999):</label></td>
+        <td><label for="fire_flickering">flickering (0..999) [1/1000]:</label></td>
         <td><span id="fire_flickering_display_value">0</span></td>
-        <td><input type="range" id="fire_flickering" name="fire_flickering" value="0" min="0" max="999" oninput="document.getElementById('fire_flickering_display_value').innerHTML = this.value" onchange="document.getElementById('fire_flickering_display_value').innerHTML = this.value"></td>
+        <td><input type="range" id="fire_flickering" name="fire_flickering" value="1" min="1" max="999" oninput="document.getElementById('fire_flickering_display_value').innerHTML = this.value" onchange="document.getElementById('fire_flickering_display_value').innerHTML = this.value"></td>
       </tr>
       <tr>
-        <td><label for="fire_speed">speed (1..200):</label></td>
+        <td><label for="fire_speed">speed (1000..100000) [µs]:</label></td>
         <td><span id="fire_speed_display_value">0</span></td>
-        <td><input type="range" id="fire_speed" name="fire_speed" value="0" min="1" max="200" oninput="document.getElementById('fire_speed_display_value').innerHTML = this.value" onchange="document.getElementById('fire_speed_display_value').innerHTML = this.value"></td>
+        <td><input type="range" id="fire_speed" name="fire_speed" value="1" min="1000" max="100000" oninput="document.getElementById('fire_speed_display_value').innerHTML = this.value" onchange="document.getElementById('fire_speed_display_value').innerHTML = this.value"></td>
       </tr>
-    </table>
+      <tr>
+        <td><label for="fire_yel_fact">Yellow factor (1..1000) [1/1000]:</label></td>
+        <td><span id="fire_yel_fact_display_value">0</span></td>
+        <td><input type="range" id="fire_yel_fact" name="fire_yel_fact" value="1" min="1" max="1000" oninput="document.getElementById('fire_yel_fact_display_value').innerHTML = this.value" onchange="document.getElementById('fire_yel_fact_display_value').innerHTML = this.value"></td>
+      </tr>    </table>
 
 
   </body>
