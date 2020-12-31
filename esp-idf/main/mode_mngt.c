@@ -59,9 +59,11 @@ static inline bool checkmodes(const char *function_name,
 typedef enum e_bootanim_step {
     BOOTANIM_INIT=0,
     DIMMUP,
-    FADE,
+    ROT_FADE,
+//     ACCEL_ROT,
     ROTATION,
-    DIMMDOWN
+    ROT_DIMMDOWN,
+    ANIMATION_END
 } bootanim_step_t;
 
 typedef struct s_cb_bootanim_data {
@@ -70,14 +72,36 @@ typedef struct s_cb_bootanim_data {
     HSV_color_t led2_hsv;
     HSV_color_t led3_hsv;
     uint64_t ref_time;
+    float angle_offset; // angle at end of rotation
+    // avoid a glitch in colors when ROTATION ends
+    // used as a base offset in ROT_DIMMDOWN*
 } cb_bootanim_data_t;
 
-static const float dimmup_duration = 5*1000000.0;   // µsecond
-static const float fade_duration = 2*1000000.0;     // µsecond
-static const float rotation_speed = (1/3.0)*1000000.0;   // Hz
-static const float rotation_duration = 10*1000000.0;   // µsecond
-static const float dimmdown_duration = 5*1000000.0; // µsecond
+// static const float dimmup_duration = 0.75*1000000.0;   // µsecond
+// static const float fade_duration = 0.75*1000000.0;     // µsecond
+// static const float rotation_speed = 2;   // Hz
+// static const float accel_rot_duration = 3.0*1000000.0;   // µsecond
+// static const float rotation_duration = 1*1000000.0;   // µsecond
+// static const float dimmdown_duration = 2.5*1000000.0; // µsecond
+// static const float phase_led1 = 0.0;
+// static const float phase_led2 = 1/9.0;
+// static const float phase_led3 = 2/9.0;
 
+
+static const float dimmup_duration = CONFIG_BOOTANIM_DIMMUP_DURATION*1000.0;   // millisecond
+static const float fade_duration = CONFIG_BOOTANIM_FADE_DURATION*1000.0;     // millisecond
+static const float rotation_speed = CONFIG_BOOTANIM_ROTATION_SPEED / 1000.0;   // milliHertz
+// static const float accel_rot_duration = CONFIG_BOOTANIM_*0000.0;   // millisecond
+static const float rotation_duration = CONFIG_BOOTANIM_ROTATION_DURATION*1000.0;   // millisecond
+static const float dimmdown_duration = CONFIG_BOOTANIM_DIMMDOWN_DURATION*1000.0; // millisecond
+static const float phase_led1 = CONFIG_BOOTANIM_PHASE_LED_BOTTOM/1000.0; // +
+static const float phase_led2 = CONFIG_BOOTANIM_PHASE_LED_MIDDLE/1000.0;
+static const float phase_led3 = CONFIG_BOOTANIM_PHASE_LED_TOP/1000.0;
+
+
+
+// blahblahblah
+// cie1931: [0.0 .. 1.0] -> [0.0 .. 0.1]
 float cie1931(float L) {
     L = L*100.0;
     if (L <= 8) {
@@ -87,29 +111,60 @@ float cie1931(float L) {
     return x*x*x;
 }
 
-float dimm(float value) {
-    return 0.7 * cie1931(value);
+
+// "Transfert functions".
+// Let t be the time of the current animation step
+// Let T be the duration of the current animation step
+// for single variable TF, we generally assume x = t/T € [0.0..1.0]
+
+// easeOutQuad: [0.0 .. 1.0] -> [0.0 .. 0.7]
+float dimm(float x) {
+    return 0.7 * cie1931(x);
 }
 
-float fade(float value) {
-    return expf(value/2)-1.0;
+// fade: [0.0 .. 1.0] -> [0.0 .. ~0.66]
+float fade(float x) {
+    return expf(x/2)-1.0;
 }
+////******* SEEMS WRONG *********** /////
+////        and overkill
+// easeOutQuad: [0.0 .. 1.0] -> [0.0 .. 1.0]
+// float easeOutQuad(float x) {
+//     //https://easings.net/#easeOutQuad
+//     return (1.0 - (1.0 - x) * (1.0 - x));
+// }
+//
+// // Hand calculated integral of easeOutQuad(t) in respect to t
+// float easeOutQuad_integral(float t, float T) {
+//     return -(t*t*t/(3.0*T)) + t*t/T;
+// }
+///////////////////////////////////////////
+
+
+inline float unity(float x) {return x;}
+inline float unity_integral(float x) {return x*x/2;};
+
 
 #define TAG_REF_TIME() (data->ref_time = esp_timer_get_time())
 
+inline float modulo1(float x) {
+    while (x>1.0) x -= 1.0;
+    return x;
+}
+
 void cb_mode_bootanim(void* arg) {
-    static uint8_t accepted_modes[] = { BOOTANIM };
+    static modeid_t accepted_modes[] = { BOOTANIM };
 
     cb_bootanim_data_t *data = (cb_bootanim_data_t*)arg;
     uint64_t current_time = esp_timer_get_time(); // µs
 
-    if ( ! checkmodes(accepted_modes, sizeof(accepted_modes))) return;
+    if ( ! checkmodes("cb_mode_bootanim", accepted_modes, NULL, sizeof(accepted_modes))) return;
 
     switch(data->step) {
         case BOOTANIM_INIT:
-            init_hsv(&data->led1_hsv, 0.0/3.0, 0.0, 0.0);
-            init_hsv(&data->led2_hsv, 1.0/3.0, 0.0, 0.0);
-            init_hsv(&data->led3_hsv, 2.0/3.0, 0.0, 0.0);
+            init_hsv(&data->led1_hsv, modulo1( phase_led1 ) , 0.0, 0.0);
+            init_hsv(&data->led2_hsv, modulo1( phase_led2 ), 0.0, 0.0);
+            init_hsv(&data->led3_hsv, modulo1( phase_led3 ), 0.0, 0.0);
             data->step = DIMMUP;
             TAG_REF_TIME();
         break;
@@ -119,58 +174,111 @@ void cb_mode_bootanim(void* arg) {
             data->led1_hsv.v = value;
             data->led2_hsv.v = value;
             data->led3_hsv.v = value;
-
+            ESP_LOGD(TAG, "%llu DU:%f", current_time-data->ref_time, value);
             if (current_time > data->ref_time + dimmup_duration) {
                 TAG_REF_TIME();
-                data->step = FADE;
+                data->step = ROT_FADE;
             }
         }
         break;
-        case FADE:
+        case ROT_FADE:
         {
-            float saturation = fade((current_time - data->ref_time)/fade_duration);
+//             float saturation = fade((current_time - data->ref_time)/fade_duration);
+            float saturation = unity((current_time - data->ref_time)/fade_duration);
+
+            float angle =
+            modulo1( rotation_speed *
+                     (current_time - data->ref_time)/1000000.0 );
+
+            ESP_LOGD(TAG, "%llu RO:%f", current_time-data->ref_time, angle);
+
+            data->led1_hsv.h = modulo1( angle + phase_led1 );
+            data->led2_hsv.h = modulo1( angle + phase_led2 );
+            data->led3_hsv.h = modulo1( angle + phase_led3 );
             data->led1_hsv.s = saturation;
             data->led2_hsv.s = saturation;
             data->led3_hsv.s = saturation;
 
             if (current_time > data->ref_time + fade_duration) {
                 TAG_REF_TIME();
+                data->angle_offset = angle;
                 data->step = ROTATION;
             }
         }
         break;
+//         case ACCEL_ROT:
+//         {
+//             float angle =
+//             modulo1( rotation_speed *
+//                      unity_integral((current_time - data->ref_time)/accel_rot_duration)
+//             );
+//             ESP_LOGD(TAG, "%llu AC:%f", current_time-data->ref_time, angle);
+//             data->led1_hsv.h = modulo1( angle + phase_led1 );
+//             data->led2_hsv.h = modulo1( angle + phase_led2 );
+//             data->led3_hsv.h = modulo1( angle + phase_led3 );
+//             if (current_time > data->ref_time + accel_rot_duration) {
+//                 TAG_REF_TIME();
+//                 data->angle_offset = angle;
+//                 data->step = ROTATION;
+//             }
+//         }
+//         break;
         case ROTATION:
         {
-            float angle = rotation_speed*(current_time - data->ref_time)/1000000.0;
-            data->led1_hsv.s = angle;
-            data->led2_hsv.s = angle+1.0/3.0;
-            data->led3_hsv.s = angle+2.0/3.0;
+
+            float angle =
+            modulo1( data->angle_offset +
+                     rotation_speed * (current_time - data->ref_time)/1000000.0 );
+
+            ESP_LOGD(TAG, "%llu RO:%f", current_time-data->ref_time, angle);
+            data->led1_hsv.h = modulo1( angle + phase_led1 );
+            data->led2_hsv.h = modulo1( angle + phase_led2 );
+            data->led3_hsv.h = modulo1( angle + phase_led3 );
 
             if (current_time > data->ref_time + rotation_duration) {
                 TAG_REF_TIME();
-                data->step = DIMMDOWN;
+                data->angle_offset = angle;
+                data->step = ROT_DIMMDOWN;
             }
         }
         break;
-        case DIMMDOWN:
+        case ROT_DIMMDOWN:
         {
             float value = dimm(1 - (current_time - data->ref_time)/dimmup_duration);
-            float angle = rotation_speed*(current_time - data->ref_time)/1000000.0;
-            data->led1_hsv.s = angle;
+            if (value<0) value = 0.0;
+
+            float angle =
+            modulo1( data->angle_offset +
+                     rotation_speed * (current_time - data->ref_time)/1000000.0 );
+
+            ESP_LOGD(TAG, "%llu DD:%f, %f", current_time-data->ref_time, angle, value);
+
+            data->led1_hsv.h = modulo1( angle + phase_led1 );
+            data->led2_hsv.h = modulo1( angle + phase_led2 );
+            data->led3_hsv.h = modulo1( angle + phase_led3 );
             data->led1_hsv.v = value;
-            data->led2_hsv.s = angle+1.0/3.0;
             data->led2_hsv.v = value;
-            data->led3_hsv.s = angle+2.0/3.0;
             data->led3_hsv.v = value;
 
             if (current_time > data->ref_time + dimmdown_duration) {
                 TAG_REF_TIME();
-                data->step = DIMMDOWN;
+                data->step = ANIMATION_END;
+                data->led1_hsv.h = 0;
+                data->led1_hsv.s = 0;
+                data->led1_hsv.v = 0;
+                data->led2_hsv.h = 0;
+                data->led2_hsv.s = 0;
+                data->led2_hsv.v = 0;
+                data->led3_hsv.h = 0;
+                data->led3_hsv.s = 0;
+                data->led3_hsv.v = 0;
             }
         }
         break;
+        case ANIMATION_END:
+        break;
         default:
-            ESP_LOGE(TAG, "BOOTANIM : Unknown step kind %d. Expected: BOOTANIM_INIT, DIMMUP, FADE, ROTATION, DIMMDOWN.", data->step);
+            ESP_LOGE(TAG, "BOOTANIM : Unknown step kind %d. Expected: BOOTANIM_INIT, DIMMUP, ROT_FADE, ROTATION, ROT_DIMMDOWN*.", data->step);
     }
 
     RGB_color_t rgb;
