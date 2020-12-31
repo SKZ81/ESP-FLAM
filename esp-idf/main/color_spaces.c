@@ -1,6 +1,6 @@
 #include "color_spaces.h"
 #include <stdio.h>
-
+#include "esp_log.h"
 
 static inline float min2(float a, float b) {
     return (a<b)? a : b;
@@ -23,7 +23,6 @@ void rgb2hsl(const RGB_color_t *rgb, HSL_color_t *hsl) {
     float r = rgb->r / 255.0;
     float g = rgb->g / 255.0;
     float b = rgb->b / 255.0;
-    printf("r:%f, g/%f, b:%f\n", r, g, b);
 
     float max = max3(r, g, b);
     float min = min3(r, g, b);
@@ -131,10 +130,11 @@ void hsv2rgb(const HSV_color_t *hsv, RGB_color_t *rgb) {
         case 4: r = t, g = p, b = v; break;
         case 5: r = v, g = p, b = q; break;
     }
-
     rgb->r = (uint8_t)(r*255);
     rgb->g = (uint8_t)(g*255);
     rgb->b = (uint8_t)(b*255);
+
+    ESP_LOGD("hsv2rgb", "(%f,%f,%f) -> (%d,%d,%d)", hsv->h, hsv->s, hsv->v, rgb->r, rgb->g, rgb->b);
 }
 
 
