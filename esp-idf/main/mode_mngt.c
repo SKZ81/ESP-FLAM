@@ -16,9 +16,12 @@ mode_cfg_t mode_config;
 static const char *TAG = "ModeMngt";
 
 
-static inline bool checkmode(uint8_t expected_mode, const char* expected_mode_name) {
-    if (mode_config.mode != FIRE) {
-        ESP_LOGE(TAG, "In cb_mode_fire but mode != FIRE (%d)", mode_config.mode);
+static inline bool checkmode(const char *caller_mode_name,
+                             modeid_t expected_mode,
+                             const char* expected_mode_name) {
+    if (mode_config.mode != expected_mode) {
+        ESP_LOGE(TAG, "In %s but mode (%d) != %s (%d)", caller_mode_name,
+                 mode_config.mode, expected_mode_name, mode_config.mode);
         ESP_LOGI(TAG, "Cowardly return without doing nothing...");
         return false;
     }
@@ -26,7 +29,10 @@ static inline bool checkmode(uint8_t expected_mode, const char* expected_mode_na
 }
 
 
-static inline bool checkmodes(uint8_t accepted_modes[], uint8_t accepted_modes_size) {
+static inline bool checkmodes(const char *function_name,
+                              modeid_t accepted_modes[],
+                              const char *accepted_modes_names[], // NULL => ignore
+                              uint8_t accepted_modes_size) {
     uint8_t index = 0;
     while (index < accepted_modes_size && accepted_modes[index] != mode_config.mode) {
         index++;
@@ -35,7 +41,11 @@ static inline bool checkmodes(uint8_t accepted_modes[], uint8_t accepted_modes_s
         ESP_LOGE(TAG, "In cb_mode_blink but mode (%d)", mode_config.mode);
         ESP_LOGE(TAG, "Not in accepted_modes list :");
         for(uint8_t i=0; i<accepted_modes_size; i++) {
-            ESP_LOGE(TAG, " - %d", accepted_modes[i]);
+            if (accepted_modes_names) {
+                ESP_LOGE(TAG, " - %s (%d)", accepted_modes_names[i], accepted_modes[i]);
+            } else {
+                ESP_LOGE(TAG, " - %d", accepted_modes[i]);
+            }
         }
         ESP_LOGI(TAG, "Cowardly return without doing nothing...");
         return false;
@@ -196,9 +206,9 @@ void cb_mode_blink(void* arg) {
     const mode_blink_cfg_t *conf = &(mode_config.config.blink);
     uint64_t current_time = esp_timer_get_time(); // µs
 
-    static uint8_t accepted_modes[] = { ERROR_WIFI,
-                                        CONNECTING};
-    if ( ! checkmodes(accepted_modes, sizeof(accepted_modes))) return;
+    static modeid_t accepted_modes[] = { ERROR_WIFI,
+                                         CONNECTING};
+    if ( ! checkmodes("cb_mode_blink", accepted_modes, NULL, sizeof(accepted_modes))) return;
 
 
     if (current_time > data->next_timestamp) {
@@ -256,7 +266,7 @@ void cb_mode_fire( void * arg ) {
     uint64_t current_time = esp_timer_get_time();
 //     static uint64_t last_time = 0;
 
-    if ( ! checkmode(FIRE, "FIRE")) return;
+    if ( ! checkmode("cb_mode_fire", FIRE, "FIRE")) return;
 
 //     if(current_time < last_time) {
 //         // time counter has overflown, reset next_timestamp.
