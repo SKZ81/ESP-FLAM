@@ -40,8 +40,8 @@ void espflam_leds_init(led_conf_t leds_config[NB_LEDS]) {
     ESP_LOGI(TAG, "Configuring Initial Parameters of mcpwm...");
     mcpwm_config_t pwm_config;
     pwm_config.frequency = 1000;    //frequency = 1000Hz
-    pwm_config.cmpr_a = 66.0;       //duty cycle of PWMxA = 00.0%
-    pwm_config.cmpr_b = 33.0;       //duty cycle of PWMxb = 00.0%
+    pwm_config.cmpr_a = 0.0;       //duty cycle of PWMxA = 00.0%
+    pwm_config.cmpr_b = 0.0;       //duty cycle of PWMxb = 00.0%
     pwm_config.counter_mode = MCPWM_UP_DOWN_COUNTER;
     pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
 
